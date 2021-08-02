@@ -72,7 +72,7 @@ def stacking_ensemble(
     def is_better(case1, case2): return eval_method([case1[0], case2[0]]) == 0
     def _update(new_param):
         nonlocal best_param
-        if eval_method([new_param[0], best_param[0]]) == 0:
+        if eval_method([best_param[0], new_param[0]]) == 1:
             if verbose: print(f"eval update: {best_param[0]} -> {new_param[0]}")
             best_param = new_param[0], new_param[1].copy()
     def metric_helper(weight):
