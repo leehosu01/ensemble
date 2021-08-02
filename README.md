@@ -54,7 +54,9 @@ def acc_evalueate(y_true):
 
 ## ensembing
 ```python
+!pip install git+github.com/leehosu01/ensemble.git
 import ensemble
+import numpy as np
 weights = ensemble.ensemble(
     model_predict_functions     = [model.predict for model in models],
     dataset                     = test_images     ,
