@@ -102,3 +102,29 @@ predict = ensemble.ensemble_predict_function(
 
 loss_evalueate(test_labels)(predict(test_images)), acc_evalueate(test_labels)(predict(test_images))
 ```
+
+## ensembling 2.1.0 update feature
+```python
+!pip install git+https://github.com/leehosu01/ensemble.git
+import ensemble
+import numpy as np
+weights = ensemble.ensemble(
+    model_predict_functions     = [model.predict for model in models],
+    dataset                     = test_images     ,
+    eval_function               = loss_evalueate(test_labels),
+    eval_method                 = np.argmin,
+    random_sample_count         = 4,
+    random_order_length         = 1024,
+    rate_underbound             = (lambda progress: 1.00 - ( 1.00 - progress ) * 0.50  ),
+    rate_upperbound             = (lambda progress: 2.00 - ( progress * 0.75 )         ),
+    search_method               = ensemble.ternary_search,
+    search_precision            = 5,
+    use_advanced_feature        = True,
+    verbose                     = 1 )
+
+predict = ensemble.ensemble_predict_function(
+    [model.predict for model in models], weights, use_advanced_feature = True
+) # get predict function
+
+loss_evalueate(test_labels)(predict(test_images)), acc_evalueate(test_labels)(predict(test_images))
+```
