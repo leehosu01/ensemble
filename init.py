@@ -25,10 +25,10 @@ def normalize_weight(weight):
 def random_search_(low, upp, target_function):
     weight = low + (upp - low) * random.random()
     return target_function(weight), weight
-def random_search(low, upp, target_function, select_best, is_better, search_precision = 20):
+def random_search(low, upp, target_function, select_best, is_better, search_precision = 20, verbose = 0):
     functional_space = [random_search_(low, upp, target_function) for _ in range(search_precision)]
     return select_best(functional_space)
-def ternary_search(low, upp, target_function, select_best, is_better, search_precision = 20):
+def ternary_search(low, upp, target_function, select_best, is_better, search_precision = 20, verbose = 0):
     def _update(new_param):
         nonlocal best_param
         best_param = select_best([new_param, best_param])
@@ -49,8 +49,9 @@ def ternary_search(low, upp, target_function, select_best, is_better, search_pre
         best_mid = [(midlow_value, midlow), (midupp_value, midupp)][::-1][is_better((midlow_value, midlow), (midupp_value, midupp))]
         _update(best_mid)
         if not is_better(best_mid, worst_side): # In the same case, the condition does not apply
-            print(f"target space seems unstable")
-            print(f"({low:.4e}, {low_value:.4e}), ({midlow:.4e}, {midlow_value:.4e}), ({midupp:.4e}, {midupp_value:.4e}), ({upp:.4e}, {upp_value:.4e})")
+            if verbose  > 4:
+                print(f"target space seems unstable")
+                print(f"({low:.4e}, {low_value:.4e}), ({midlow:.4e}, {midlow_value:.4e}), ({midupp:.4e}, {midupp_value:.4e}), ({upp:.4e}, {upp_value:.4e})")
             _update(random_search(low, upp, target_function, select_best, search_precision - search_attempts))
             break
         elif midlow_value < midupp_value: upp = midupp
@@ -73,7 +74,7 @@ def stacking_ensemble(
     def _update(new_param):
         nonlocal best_param
         if eval_method([best_param[0], new_param[0]]) == 1:
-            if verbose: print(f"eval update: {best_param[0]} -> {new_param[0]}")
+            if verbose > 1: print(f"eval update: {best_param[0]} -> {new_param[0]}")
             best_param = new_param[0], new_param[1].copy()
     def metric_helper(weight):
         W_shape  = [(I if i == 0 else 1) for i, I in enumerate(model_predicts.shape)]
@@ -98,9 +99,10 @@ def stacking_ensemble(
             select_best = select_best,
             is_better = is_better,
             target_function = target_function,
-            search_precision= search_precision)
+            search_precision= search_precision,
+            verbose = verbose)
         weight = setting(multipler)
-        if verbose: print(f"{i}:model_{current_order}, {multipler:1.5f} : eval = {metric}")
+        if verbose > 2: print(f"{i}:model_{current_order}, {multipler:1.5f} : eval = {metric}")
         _update((metric, weight))
     return best_param
 def ensemble(
@@ -166,10 +168,10 @@ def ensemble(
     """
     
     best_param = None, None
-    def _update(new_param):
+    def _update(new_param, trial):
         nonlocal best_param
-        if best_param[0] is None or eval_method([new_param[0], best_param[0]]) == 0:
-            if verbose: print(f"eval update: {best_param[0]} -> {new_param[0]}")
+        if best_param[0] is None or eval_method([best_param[0], new_param[0]]) == 1:
+            if verbose > 0: print(f"eval update at trial {trial:04d}: {new_param[0]}")
             best_param = new_param[0], new_param[1].copy()
     
     model_predicts = np.array([predict_function(dataset) 
@@ -186,5 +188,5 @@ def ensemble(
                                             search_method       = search_method,
                                             search_precision    = search_precision,
                                             verbose = verbose)
-        _update(new_param)
+        _update(new_param, trial)
     return best_param[1]
