@@ -101,13 +101,13 @@ def stacking_ensemble(
         assert low <= 1. <= upp
         def setting(rate):
             RES = weights.copy()
-            RES[current_order] *= rate
+            if rate < 0: correction_rate = low ** -rate
+            if rate >=0: correction_rate = upp **  rate
+            RES[current_order] *= correction_rate
             return normalize_weights(RES)
         def target_function(rate):
             #less memory 사용가능, rates를 받아서 쿼리는 따로넣어도 ens pred는 동시에 생성가능
-            if rate < 0: correction_rate = low ** -rate
-            if rate >=0: correction_rate = upp **  rate
-            return metric_helper(setting(correction_rate))
+            return metric_helper(setting(rate))
         metric, multipler = search_method(
             low = -1,
             upp = +1,
