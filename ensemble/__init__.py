@@ -17,7 +17,7 @@ def ensemble_predict_function(
     def _sub(dataset):
         result = None
         if use_advanced_feature == False:
-            for predict, weight in zip(model_predict_functions, weights):
+            for predict, weight in zip(model_predict_functions, weights_):
                 pred = predict(dataset)
                 if result is None: result = pred * weight
                 else: result += pred * weight
@@ -26,9 +26,10 @@ def ensemble_predict_function(
             model_predicts = np.concatenate([model_predicts, np.sort(model_predicts, axis = 0)], axis = 0)
             
             W_shape  = [(I if i == 0 else 1) for i, I in enumerate(model_predicts.shape)]
-            result = (model_predicts * np.reshape(weights, tuple(W_shape))).sum(axis = 0)
+            result = (model_predicts * np.reshape(weights_, tuple(W_shape))).sum(axis = 0)
 
         return result
+    weights_ = weights.copy()
     return _sub
 def normalize_weights(weights):
     return weights / (1e-9 + weights.sum(axis = 0))
