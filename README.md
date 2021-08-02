@@ -54,7 +54,7 @@ def acc_evalueate(y_true):
 
 ## ensembing
 ```python
-!pip install git+github.com/leehosu01/ensemble.git
+!pip install git+https://github.com/leehosu01/ensemble.git
 import ensemble
 import numpy as np
 weights = ensemble.ensemble(
