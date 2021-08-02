@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="auto ensemble", # 이 패키지를 설치/삭제할 때 사용할 이름을 의미한다. 이 이름과 import할 때 쓰이는 이름은 다르다.
-    version="1.0.0",
+    version="1.0.1",
     author="Hosu Lee",
     author_email="leehosu01@naver.com",
     description="The simplest ensemble library machine learning model.",

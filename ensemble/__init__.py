@@ -98,17 +98,19 @@ def stacking_ensemble(
     for i, current_order in enumerate(order):
         low = rate_underbound if type(rate_underbound) == float else rate_underbound(i / len(order))
         upp = rate_upperbound if type(rate_upperbound) == float else rate_upperbound(i / len(order))
+        assert low <= 1. <= upp
         def setting(rate):
             RES = weights.copy()
             RES[current_order] *= rate
             return normalize_weights(RES)
         def target_function(rate):
             #less memory 사용가능, rates를 받아서 쿼리는 따로넣어도 ens pred는 동시에 생성가능
-            return metric_helper(setting(rate))
-            
+            if rate < 0: correction_rate = low ** -rate
+            if rate >=0: correction_rate = upp **  rate
+            return metric_helper(setting(correction_rate))
         metric, multipler = search_method(
-            low = low,
-            upp = upp,
+            low = -1,
+            upp = +1,
             select_best = select_best,
             is_better = is_better,
             target_function = target_function,
