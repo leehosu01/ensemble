@@ -77,7 +77,7 @@ def stacking_ensemble(
     eval_method         :Callable = np.argmin,
     rate_underbound     :Union[float, Callable] = 0.25,
     rate_upperbound     :Union[float, Callable] = 4.00 ,
-    search_method       :Callable = 'auto',
+    search_method       :Callable = ternary_search,
     search_precision    :int = 40,
     less_memory         :bool = False,
     verbose = 1):
