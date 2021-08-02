@@ -52,7 +52,7 @@ def acc_evalueate(y_true):
     return _sub
 ```
 
-## ensembing
+## ensembing with loss
 ```python
 !pip install git+https://github.com/leehosu01/ensemble.git
 import ensemble
@@ -66,7 +66,33 @@ weights = ensemble.ensemble(
     random_order_length         = 256,
     rate_underbound             = 0.10,
     rate_upperbound             = 2.00,
-    search_method               = ternary_search,
+    search_method               = ensemble.ternary_search,
+    search_precision            = 5,
+    verbose                     = 1 )
+
+predict = ensemble.ensemble_predict_function(
+    [model.predict for model in models], weights
+) # get predict function
+
+loss_evalueate(test_labels)(predict(test_images)), acc_evalueate(test_labels)(predict(test_images))
+```
+
+
+## ensembing with acc
+```python
+!pip install git+https://github.com/leehosu01/ensemble.git
+import ensemble
+import numpy as np
+weights = ensemble.ensemble(
+    model_predict_functions     = [model.predict for model in models],
+    dataset                     = test_images     ,
+    eval_function               = acc_evalueate(test_labels),
+    eval_method                 = np.argmax,
+    random_sample_count         = 8,
+    random_order_length         = 256,
+    rate_underbound             = 0.10,
+    rate_upperbound             = 2.00,
+    search_method               = ensemble.ternary_search,
     search_precision            = 5,
     verbose                     = 1 )
 

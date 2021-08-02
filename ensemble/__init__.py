@@ -11,20 +11,30 @@ import numpy as np
 import random
 def ensemble_predict_function(
     model_predict_functions     : List[Callable],
-    weights                     : np.ndarray):
+    weights                     : np.ndarray,
+    use_advanced_feature        : bool = False,
+    less_memory                 : bool = False):
     def _sub(dataset):
         result = None
-        for predict, weight in zip(model_predict_functions, weights):
-            pred = predict(dataset)
-            if result is None: result = pred * weight
-            else: result += pred * weight
+        if use_advanced_feature == False:
+            for predict, weight in zip(model_predict_functions, weights):
+                pred = predict(dataset)
+                if result is None: result = pred * weight
+                else: result += pred * weight
+        else:
+            model_predicts = np.array([predict_function(dataset) for predict_function in model_predict_functions])
+            model_predicts = np.concatenate([model_predicts, np.sort(model_predicts, axis = 0)], axis = 0)
+            
+            W_shape  = [(I if i == 0 else 1) for i, I in enumerate(model_predicts.shape)]
+            result = (model_predicts * np.reshape(weights, tuple(W_shape))).sum(axis = 0)
+
         return result
     return _sub
-def normalize_weight(weight):
-    return weight / (1e-9 + weight.sum(axis = 0))
+def normalize_weights(weights):
+    return weights / (1e-9 + weights.sum(axis = 0))
 def random_search_(low, upp, target_function):
-    weight = low + (upp - low) * random.random()
-    return target_function(weight), weight
+    rate = low + (upp - low) * random.random()
+    return target_function(rate), rate
 def random_search(low, upp, target_function, select_best, is_better, search_precision = 20, verbose = 0):
     functional_space = [random_search_(low, upp, target_function) for _ in range(search_precision)]
     return select_best(functional_space)
@@ -66,31 +76,33 @@ def stacking_ensemble(
     eval_method         :Callable = np.argmin,
     rate_underbound     :Union[float, Callable] = 0.25,
     rate_upperbound     :Union[float, Callable] = 4.00 ,
-    search_method       :Union[str, Callable] = 'auto',
+    search_method       :Callable = 'auto',
     search_precision    :int = 40,
+    less_memory         :bool = False,
     verbose = 1):
     def select_best(cases): return cases[eval_method(list(zip(*cases))[0])]
-    def is_better(case1, case2): return eval_method([case1[0], case2[0]]) == 0
+    def is_better(case1, case2): return bool(eval_method([case1[0], case2[0]]) == 0)
     def _update(new_param):
         nonlocal best_param
         if eval_method([best_param[0], new_param[0]]) == 1:
             if verbose > 1: print(f"eval update: {best_param[0]} -> {new_param[0]}")
             best_param = new_param[0], new_param[1].copy()
-    def metric_helper(weight):
+    def metric_helper(weights):
         W_shape  = [(I if i == 0 else 1) for i, I in enumerate(model_predicts.shape)]
-        ens_pred = (model_predicts * np.reshape(weight, tuple(W_shape))).sum(axis = 0)
+        ens_pred = (model_predicts * np.reshape(weights, tuple(W_shape))).sum(axis = 0)
         return eval_function(ens_pred)
-    weight = np.ones((len(model_predicts), ), dtype = 'float32')
-    weight = normalize_weight(weight)
-    best_param   = metric_helper(weight), weight
+    weights = np.ones((len(model_predicts), ), dtype = 'float32')
+    weights = normalize_weights(weights)
+    best_param   = metric_helper(weights), weights
     for i, current_order in enumerate(order):
         low = rate_underbound if type(rate_underbound) == float else rate_underbound(i / len(order))
         upp = rate_upperbound if type(rate_upperbound) == float else rate_upperbound(i / len(order))
         def setting(rate):
-            RES = weight.copy()
+            RES = weights.copy()
             RES[current_order] *= rate
-            return normalize_weight(RES)
+            return normalize_weights(RES)
         def target_function(rate):
+            #less memory 사용가능, rates를 받아서 쿼리는 따로넣어도 ens pred는 동시에 생성가능
             return metric_helper(setting(rate))
             
         metric, multipler = search_method(
@@ -101,22 +113,23 @@ def stacking_ensemble(
             target_function = target_function,
             search_precision= search_precision,
             verbose = verbose)
-        weight = setting(multipler)
+        weights = setting(multipler)
         if verbose > 2: print(f"{i}:model_{current_order}, {multipler:1.5f} : eval = {metric}")
-        _update((metric, weight))
+        _update((metric, weights))
     return best_param
 def ensemble(
     model_predict_functions     : List[Callable],
     dataset      ,
     eval_function       :Callable,
     eval_method         :Callable = np.argmin,
-    random_sample_count :int = 16,
-    random_order_length :int = 256,
-    rate_underbound     :Union[float, Callable] = 0.25,
-    rate_upperbound     :Union[float, Callable] = 4.00 ,
+    random_sample_count :int = 8,
+    random_order_length :int = 512,
+    rate_underbound     :Union[float, Callable] = 0.10,
+    rate_upperbound     :Union[float, Callable] = 2.00 ,
     search_method       :Callable = ternary_search,
-    search_precision    :int = 20,
-    use_memmap          :bool = False,
+    search_precision    :int = 10,
+    use_advanced_feature:bool = False,
+    less_memory         :bool = False,
     verbose = 0) -> np.ndarray:
     
     """
@@ -138,28 +151,34 @@ def ensemble(
         if A, B, C, D case are provided and you need to select C, then this function return 2.
         The default is np.argmin.
     random_sample_count : int, optional
-        ensemble order sampling. The default is 16.
+        ensemble order sampling. The default is 8.
     random_order_length : int, optional
-        ensemble order length. The default is 256.
+        ensemble order length. The default is 512.
     rate_underbound : Union[float, Callable], optional
         it is underbound of multiplication.
         if you provide function, we will provide progress of current ensembing. 0. <= progress < 1.
         you need to return float.
-        The default is 0.25.
+        The default is 0.10.
     rate_upperbound : Union[float, Callable], optional
         it is upperbound of multiplication.
         if you provide function, we will provide progress of current ensembing. 0. <= progress < 1.
         you need to return float.
-        The default is 4.00.
+        The default is 2.00.
     search_method : Callable, optional
         we provide 'ternary_search' and 'random_search'.
         The default is 'ternary_search'.
     search_precision : int, optional
         if ternary, weight will be determined in (2/3)**search_precision
         if random, weight will be determined in almost 1/search_precision
-        The default is 20.
-    use_memmap : bool, optional
-        If you have limited memory, use True. The default is False.
+        The default is 10.
+    use_advanced_feature : bool, optional
+        There are cases where experimentally strong performance is shown, but this is not always the case.
+        The default is False.
+    less_memory : bool, optional
+        If you have limited memory, use True.
+        Algorithm will much slower
+        Still not implemented
+        The default is False.
 
     Returns
     -------
@@ -173,9 +192,11 @@ def ensemble(
         if best_param[0] is None or eval_method([best_param[0], new_param[0]]) == 1:
             if verbose > 0: print(f"eval update at trial {trial:04d}: {new_param[0]}")
             best_param = new_param[0], new_param[1].copy()
-    
+    #less memory 사용가능
     model_predicts = np.array([predict_function(dataset) 
                                for predict_function in model_predict_functions])
+    if use_advanced_feature:
+        model_predicts = np.concatenate([model_predicts, np.sort(model_predicts, axis = 0)], axis = 0)
     for trial in range(random_sample_count): 
         order = np.arange(random_order_length) % len(model_predict_functions)
         np.random.shuffle(order)
@@ -187,6 +208,7 @@ def ensemble(
                                             rate_upperbound     = rate_upperbound,
                                             search_method       = search_method,
                                             search_precision    = search_precision,
-                                            verbose = verbose)
+                                            less_memory         = less_memory,
+                                            verbose             = verbose)
         _update(new_param, trial)
     return best_param[1]
