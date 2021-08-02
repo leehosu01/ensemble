@@ -21,14 +21,14 @@ def ensemble_predict_function(
         return result
     return _sub
 def normalize_weight(weight):
-    return weight / (1e-9 + weight.sum(axis = -2))
+    return weight / (1e-9 + weight.sum(axis = 0))
 def random_search_(low, upp, target_function):
     weight = low + (upp - low) * random.random()
     return target_function(weight), weight
-def random_search(low, upp, target_function, select_best, search_precision = 20):
+def random_search(low, upp, target_function, select_best, is_better, search_precision = 20):
     functional_space = [random_search_(low, upp, target_function) for _ in range(search_precision)]
     return select_best(functional_space)
-def ternary_search(low, upp, target_function, select_best, search_precision = 20):
+def ternary_search(low, upp, target_function, select_best, is_better, search_precision = 20):
     def _update(new_param):
         nonlocal best_param
         best_param = select_best([new_param, best_param])
@@ -36,14 +36,19 @@ def ternary_search(low, upp, target_function, select_best, search_precision = 20
     upp_value = target_function(upp)
     best_param = low_value, low
     _update((upp_value, upp))
+    
+    worst_side = [(low_value, low), (upp_value, upp)][is_better((low_value, low), (upp_value, upp))]    
     for search_attempts in range(search_precision):
         midlow = (low * 2 + upp) / 3
         midupp = (low + upp * 2) / 3
         midlow_value = target_function(midlow)
         midupp_value = target_function(midupp)
-        _update((midlow_value, midlow))
-        _update((midupp_value, midupp))
-        if min(midlow_value, midupp_value) > max(low_value, upp_value) + 1e-6:
+        #_update((midlow_value, midlow))
+        #_update((midupp_value, midupp))
+        
+        best_mid = [(midlow_value, midlow), (midupp_value, midupp)][::-1][is_better((midlow_value, midlow), (midupp_value, midupp))]
+        _update(best_mid)
+        if not is_better(best_mid, worst_side): # In the same case, the condition does not apply
             print(f"target space seems unstable")
             print(f"({low:.4e}, {low_value:.4e}), ({midlow:.4e}, {midlow_value:.4e}), ({midupp:.4e}, {midupp_value:.4e}), ({upp:.4e}, {upp_value:.4e})")
             _update(random_search(low, upp, target_function, select_best, search_precision - search_attempts))
@@ -64,6 +69,7 @@ def stacking_ensemble(
     search_precision    :int = 40,
     verbose = 1):
     def select_best(cases): return cases[eval_method(list(zip(*cases))[0])]
+    def is_better(case1, case2): return eval_method([case1[0], case2[0]]) == 0
     def _update(new_param):
         nonlocal best_param
         if eval_method([new_param[0], best_param[0]]) == 0:
@@ -75,7 +81,7 @@ def stacking_ensemble(
         return eval_function(ens_pred)
     weight = np.ones((len(model_predicts), ), dtype = 'float32')
     weight = normalize_weight(weight)
-    best_param   = eval_function(normalize_weight(weight)), weight
+    best_param   = metric_helper(weight), weight
     for i, current_order in enumerate(order):
         low = rate_underbound if type(rate_underbound) == float else rate_underbound(i / len(order))
         upp = rate_upperbound if type(rate_upperbound) == float else rate_upperbound(i / len(order))
@@ -90,6 +96,7 @@ def stacking_ensemble(
             low = low,
             upp = upp,
             select_best = select_best,
+            is_better = is_better,
             target_function = target_function,
             search_precision= search_precision)
         weight = setting(multipler)
@@ -158,10 +165,10 @@ def ensemble(
 
     """
     
-    best_param = None
+    best_param = None, None
     def _update(new_param):
         nonlocal best_param
-        if best_param is None or eval_method([new_param[0], best_param[0]]) == 0:
+        if best_param[0] is None or eval_method([new_param[0], best_param[0]]) == 0:
             if verbose: print(f"eval update: {best_param[0]} -> {new_param[0]}")
             best_param = new_param[0], new_param[1].copy()
     
